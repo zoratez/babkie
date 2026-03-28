@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Babka Rave - Uh! Edition</title>
+    <title>Babka Rave - High Arrows Edition</title>
     <style>
         body {
             background-color: #0a0a0f;
@@ -36,34 +36,38 @@
             transition: background-color 0.1s ease;
         }
 
-        /* STYLIZACJA JOYSTICKA */
-        #joystick-base {
+        /* STRZAŁKI PODNIESIONE WYŻEJ */
+        #mobile-controls {
             position: absolute;
-            bottom: 30px;
+            bottom: 140px;
+            /* ZMIENIONE Z 40px NA 140px */
             left: 50%;
             transform: translateX(-50%);
-            width: 140px;
-            height: 140px;
-            background-color: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(55, 142, 204, 0.3);
-            border-radius: 50%;
+            width: 90%;
             display: none;
-            /* Pokażemy tylko na mobile */
-            touch-action: none;
+            justify-content: space-between;
             z-index: 20;
         }
 
-        #joystick-knob {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 60px;
-            height: 60px;
-            background-color: rgba(55, 142, 204, 0.7);
-            border: 2px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 20px rgba(55, 142, 204, 0.8);
+        .arrow-btn {
+            width: 85px;
+            height: 85px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(55, 142, 204, 0.5);
+            border-radius: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 40px;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            backdrop-filter: blur(5px);
+        }
+
+        .arrow-btn:active {
+            background-color: rgba(55, 142, 204, 0.4);
+            border-color: white;
         }
 
         .overlay {
@@ -78,7 +82,7 @@
             padding: 20px;
             border: 2px solid #378ecc;
             border-radius: 10px;
-            z-index: 30;
+            z-index: 1000;
             cursor: pointer;
         }
 
@@ -123,7 +127,7 @@
         <div id="score-display">PUNKTEJ: 0</div>
 
         <div id="start-screen" class="overlay" onclick="startGame()">
-            <p>DAJUDŻIK arba szpauszk ENTER</p>
+            <p>SZPAUSZK STRZAŁKI arba ENTER</p>
             <span id="high-score-start" class="high-score-text">REKORDASZ: 0</span>
         </div>
 
@@ -131,11 +135,12 @@
             <h2 style="color: #c74242;">CZURWA!</h2>
             <p id="final-score">TAVO WYNIKASZ: 0</p>
             <p id="high-score-end" style="font-size: 13px; color: #aaa;">GERAUSZASZ: 0</p>
-            <p style="margin-top: 15px;">Dajudżik, kad pradiet da rożu, o an kompuczero szpauszk R</p>
+            <p style="margin-top: 15px;">Dotknij strzałki, kad pradiet da rożu</p>
         </div>
 
-        <div id="joystick-base">
-            <div id="joystick-knob"></div>
+        <div id="mobile-controls">
+            <div id="btn-left" class="arrow-btn">◀</div>
+            <div id="btn-right" class="arrow-btn">▶</div>
         </div>
 
         <canvas id="gameCanvas" width="400" height="600"></canvas>
@@ -151,74 +156,53 @@
         const highScoreEndEl = document.getElementById('high-score-end');
         const finalScoreEl = document.getElementById('final-score');
 
-        // Joystick Elements
-        const joyBase = document.getElementById('joystick-base');
-        const joyKnob = document.getElementById('joystick-knob');
+        const mobileControls = document.getElementById('mobile-controls');
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
 
-        // Pokaż joystick tylko na urządzeniach dotykowych
-        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-            joyBase.style.display = 'block';
+        function detectMobile() {
+            const isTouch = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+            const isNarrow = window.innerWidth < 600;
+            if (isTouch || isNarrow) mobileControls.style.display = 'flex';
         }
+        detectMobile();
 
-        // AUDIO
         const bgMusic = new Audio('muzyka.mp3');
         bgMusic.loop = true;
         const crashSound = new Audio('uh.mp3');
 
         const BPM = 154;
         const DISCO_INTERVAL = 60000 / BPM;
-        let discoTimer;
-        let discoDelayTimeout;
+        let discoTimer, discoDelayTimeout;
         const DISCO_COLORS = ['#1b1e2b', '#2b1b26', '#1b2b1e', '#2b281b', '#1b262b'];
         let currentDiscoIdx = 0;
 
         const OBSTACLE_COLOR = '#378ecc';
-        const PLAYER_WIDTH = 52;
-        const PLAYER_HEIGHT = 55;
-        const PRZERWA_SZEROKOSC = 115;
-        const LINIA_WYSOKOSC = 18;
+        const PLAYER_WIDTH = 52, PLAYER_HEIGHT = 55;
+        const PRZERWA_SZEROKOSC = 115, LINIA_WYSOKOSC = 18;
         const PREDKOSC_STALA = 5;
 
-        // OBRAZKI
-        const babkaImg = new Image();
-        babkaImg.src = 'babka.png';
-        const babkaDeadImg = new Image();
-        babkaDeadImg.src = 'babka_dead.png';
+        const babkaImg = new Image(); babkaImg.src = 'babka.png';
+        const babkaDeadImg = new Image(); babkaDeadImg.src = 'babka_dead.png';
 
         let player = { x: 200 - 26, y: 500 };
-        let obstacles = [];
-        let score = 0;
+        let obstacles = [], score = 0, keys = {};
+        let touchLeft = false, touchRight = false;
         let highScore = localStorage.getItem('babkaHighScore') || 0;
         let gameState = 'START';
         let lastSpawnTime = 0;
-        let keys = {};
 
         highScoreStartEl.innerText = `REKORDASZ: ${highScore}`;
 
-        // --- LOGIKA JOYSTICKA ---
-        let joyData = { active: false, x: 0 };
-        const joyLimit = 50;
+        btnLeft.addEventListener('touchstart', (e) => { touchLeft = true; e.preventDefault(); });
+        btnLeft.addEventListener('touchend', () => { touchLeft = false; });
+        btnRight.addEventListener('touchstart', (e) => { touchRight = true; e.preventDefault(); });
+        btnRight.addEventListener('touchend', () => { touchRight = false; });
 
-        joyBase.addEventListener('touchstart', (e) => { joyData.active = true; });
-        window.addEventListener('touchend', () => {
-            joyData.active = false;
-            joyKnob.style.left = '50%';
-            joyData.x = 0;
-        });
+        btnLeft.addEventListener('mousedown', () => { touchLeft = true; });
+        window.addEventListener('mouseup', () => { touchLeft = false; touchRight = false; });
+        btnRight.addEventListener('mousedown', () => { touchRight = true; });
 
-        window.addEventListener('touchmove', (e) => {
-            if (!joyData.active) return;
-            const touch = e.touches[0];
-            const baseRect = joyBase.getBoundingClientRect();
-            const centerX = baseRect.left + baseRect.width / 2;
-            let deltaX = touch.clientX - centerX;
-            if (deltaX > joyLimit) deltaX = joyLimit;
-            if (deltaX < -joyLimit) deltaX = -joyLimit;
-            joyKnob.style.left = `calc(50% + ${deltaX}px)`;
-            joyData.x = deltaX / joyLimit;
-        }, { passive: false });
-
-        // --- STEROWANIE KLAWIATURĄ ---
         window.addEventListener('keydown', (e) => {
             if (gameState === 'START' && e.code === 'Enter') startGame();
             if (gameState === 'GAMEOVER' && e.code === 'KeyR') startGame();
@@ -236,15 +220,12 @@
         function startGame() {
             bgMusic.currentTime = 0;
             bgMusic.play();
-
             clearInterval(discoTimer);
             clearTimeout(discoDelayTimeout);
             canvas.style.backgroundColor = '#1b1e2b';
 
             discoDelayTimeout = setTimeout(() => {
-                if (gameState === 'PLAYING') {
-                    discoTimer = setInterval(changeBackground, DISCO_INTERVAL);
-                }
+                if (gameState === 'PLAYING') discoTimer = setInterval(changeBackground, DISCO_INTERVAL);
             }, 24800);
 
             player.x = 200 - 26;
@@ -259,10 +240,8 @@
 
         function checkCollision(obs) {
             const margin = 8;
-            const pLeft = player.x + margin;
-            const pRight = player.x + PLAYER_WIDTH - margin;
-            const pTop = player.y + margin;
-            const pBottom = player.y + PLAYER_HEIGHT - margin;
+            const pLeft = player.x + margin, pRight = player.x + PLAYER_WIDTH - margin;
+            const pTop = player.y + margin, pBottom = player.y + PLAYER_HEIGHT - margin;
             const inLineY = pBottom > obs.y && pTop < obs.y + LINIA_WYSOKOSC;
             const hitWallX = pLeft < obs.gapX || pRight > obs.gapX + PRZERWA_SZEROKOSC;
             return inLineY && hitWallX;
@@ -271,16 +250,9 @@
         function update() {
             if (gameState !== 'PLAYING') return;
 
-            // Sterowanie Joystickiem (Mobile)
-            if (joyData.active) {
-                player.x += joyData.x * 8;
-            }
+            if (keys['ArrowLeft'] || touchLeft) player.x -= 8;
+            if (keys['ArrowRight'] || touchRight) player.x += 8;
 
-            // Sterowanie Klawiszami (PC)
-            if (keys['ArrowLeft']) player.x -= 7;
-            if (keys['ArrowRight']) player.x += 7;
-
-            // Granice ekranu
             if (player.x < 0) player.x = 0;
             if (player.x > canvas.width - PLAYER_WIDTH) player.x = canvas.width - PLAYER_WIDTH;
 
@@ -290,28 +262,22 @@
                 obstacles.push({ y: -50, gapX: gapX });
                 lastSpawnTime = now;
             }
+
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 const obs = obstacles[i];
                 obs.y += PREDKOSC_STALA;
                 if (checkCollision(obs)) {
                     gameState = 'GAMEOVER';
-
-                    bgMusic.pause();
-                    bgMusic.currentTime = 0;
+                    bgMusic.pause(); bgMusic.currentTime = 0;
                     crashSound.play();
-
-                    clearInterval(discoTimer);
-                    clearTimeout(discoDelayTimeout);
-
+                    clearInterval(discoTimer); clearTimeout(discoDelayTimeout);
                     if (score > highScore) {
                         highScore = score;
                         localStorage.setItem('babkaHighScore', highScore);
                     }
-
                     finalScoreEl.innerText = `WYNIKASZ: ${score}`;
                     highScoreEndEl.innerText = `TAVO GERAUSZASZ WYNIKASZ: ${highScore}`;
                     highScoreStartEl.innerText = `WYNIKASZ: ${highScore}`;
-
                     canvas.style.backgroundColor = '#1b1e2b';
                     gameOverScreen.style.display = 'block';
                 }
@@ -333,7 +299,6 @@
             });
 
             let imgToShow = (gameState === 'GAMEOVER') ? babkaDeadImg : babkaImg;
-
             if (imgToShow.complete) {
                 ctx.drawImage(imgToShow, player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT);
             } else {
@@ -346,10 +311,8 @@
                 draw();
             });
         }
-
         draw();
     </script>
-
 </body>
 
 </html>
