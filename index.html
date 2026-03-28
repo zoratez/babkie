@@ -36,6 +36,36 @@
             transition: background-color 0.1s ease;
         }
 
+        /* STYLIZACJA JOYSTICKA */
+        #joystick-base {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 140px;
+            height: 140px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(55, 142, 204, 0.3);
+            border-radius: 50%;
+            display: none;
+            /* Pokażemy tylko na mobile */
+            touch-action: none;
+            z-index: 20;
+        }
+
+        #joystick-knob {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background-color: rgba(55, 142, 204, 0.7);
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(55, 142, 204, 0.8);
+        }
+
         .overlay {
             position: absolute;
             top: 50%;
@@ -48,7 +78,7 @@
             padding: 20px;
             border: 2px solid #378ecc;
             border-radius: 10px;
-            z-index: 10;
+            z-index: 30;
             cursor: pointer;
         }
 
@@ -104,6 +134,10 @@
             <p style="margin-top: 15px;">Dajudżik, kad pradiet da rożu, o an kompuczero szpauszk R</p>
         </div>
 
+        <div id="joystick-base">
+            <div id="joystick-knob"></div>
+        </div>
+
         <canvas id="gameCanvas" width="400" height="600"></canvas>
     </div>
 
@@ -117,10 +151,19 @@
         const highScoreEndEl = document.getElementById('high-score-end');
         const finalScoreEl = document.getElementById('final-score');
 
+        // Joystick Elements
+        const joyBase = document.getElementById('joystick-base');
+        const joyKnob = document.getElementById('joystick-knob');
+
+        // Pokaż joystick tylko na urządzeniach dotykowych
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            joyBase.style.display = 'block';
+        }
+
         // AUDIO
         const bgMusic = new Audio('muzyka.mp3');
         bgMusic.loop = true;
-        const crashSound = new Audio('uh.mp3'); // Nowy dźwięk
+        const crashSound = new Audio('uh.mp3');
 
         const BPM = 154;
         const DISCO_INTERVAL = 60000 / BPM;
@@ -152,35 +195,36 @@
 
         highScoreStartEl.innerText = `REKORDASZ: ${highScore}`;
 
+        // --- LOGIKA JOYSTICKA ---
+        let joyData = { active: false, x: 0 };
+        const joyLimit = 50;
+
+        joyBase.addEventListener('touchstart', (e) => { joyData.active = true; });
+        window.addEventListener('touchend', () => {
+            joyData.active = false;
+            joyKnob.style.left = '50%';
+            joyData.x = 0;
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!joyData.active) return;
+            const touch = e.touches[0];
+            const baseRect = joyBase.getBoundingClientRect();
+            const centerX = baseRect.left + baseRect.width / 2;
+            let deltaX = touch.clientX - centerX;
+            if (deltaX > joyLimit) deltaX = joyLimit;
+            if (deltaX < -joyLimit) deltaX = -joyLimit;
+            joyKnob.style.left = `calc(50% + ${deltaX}px)`;
+            joyData.x = deltaX / joyLimit;
+        }, { passive: false });
+
+        // --- STEROWANIE KLAWIATURĄ ---
         window.addEventListener('keydown', (e) => {
             if (gameState === 'START' && e.code === 'Enter') startGame();
             if (gameState === 'GAMEOVER' && e.code === 'KeyR') startGame();
             keys[e.code] = true;
         });
         window.addEventListener('keyup', (e) => keys[e.code] = false);
-
-        function handleMove(clientX) {
-            if (gameState !== 'PLAYING') return;
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            let newX = (clientX - rect.left) * scaleX - (PLAYER_WIDTH / 2);
-            if (newX < 0) newX = 0;
-            if (newX > canvas.width - PLAYER_WIDTH) newX = canvas.width - PLAYER_WIDTH;
-            player.x = newX;
-        }
-
-        canvas.addEventListener('touchmove', (e) => {
-            handleMove(e.touches[0].clientX);
-            e.preventDefault();
-        }, { passive: false });
-
-        canvas.addEventListener('touchstart', (e) => {
-            handleMove(e.touches[0].clientX);
-        }, { passive: false });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (e.buttons > 0) handleMove(e.clientX);
-        });
 
         function changeBackground() {
             if (gameState === 'PLAYING') {
@@ -226,8 +270,20 @@
 
         function update() {
             if (gameState !== 'PLAYING') return;
-            if (keys['ArrowLeft'] && player.x > 0) player.x -= 7;
-            if (keys['ArrowRight'] && player.x < canvas.width - PLAYER_WIDTH) player.x += 7;
+
+            // Sterowanie Joystickiem (Mobile)
+            if (joyData.active) {
+                player.x += joyData.x * 8;
+            }
+
+            // Sterowanie Klawiszami (PC)
+            if (keys['ArrowLeft']) player.x -= 7;
+            if (keys['ArrowRight']) player.x += 7;
+
+            // Granice ekranu
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - PLAYER_WIDTH) player.x = canvas.width - PLAYER_WIDTH;
+
             const now = Date.now();
             if (now - lastSpawnTime > 1200) {
                 const gapX = Math.floor(Math.random() * (canvas.width - PRZERWA_SZEROKOSC - 40)) + 20;
@@ -240,10 +296,9 @@
                 if (checkCollision(obs)) {
                     gameState = 'GAMEOVER';
 
-                    // DZWIĘKI I EFEKTY
                     bgMusic.pause();
                     bgMusic.currentTime = 0;
-                    crashSound.play(); // Odtwórz "uh!"
+                    crashSound.play();
 
                     clearInterval(discoTimer);
                     clearTimeout(discoDelayTimeout);
